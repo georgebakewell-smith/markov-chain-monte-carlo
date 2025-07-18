@@ -1,5 +1,5 @@
 CC = gcc
-CFALGS = -g -Wall
+CFLAGS = -g -Wall
 SRC = src
 OBJ = obj
 SRCS = $(wildcard $(SRC)/*.c)
@@ -18,7 +18,7 @@ $(BIN): $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o $@ $(LDFLAGS)
 
 $(OBJ)/%.o: $(SRC)/%.c
-	$(CC) $(CFALGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 
 
