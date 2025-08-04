@@ -2,8 +2,34 @@
 #include <stdlib.h>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
+#include <gsl/gsl_math.h>
 #include <time.h>
 #include "../include/mcmc.h"
+
+double* mcmc_compute_energies(Model *model, double T){
+ 
+    printf("Computing energy lookup table\n");
+    int num_states = (int)gsl_pow_int(2, model->n_spins), s_i, s_j;
+    double *energy = malloc(sizeof(double));
+    double *energy_lookup = malloc(num_states*sizeof(double));
+
+    for(int state=0; state<num_states; state++){
+        *energy = 0;
+        for(int i=0; i<model->n_spins; i++){
+            s_i = (state >> (model->n_spins - 1 - i) & 1)*2 -1;
+            for(int j=0; j<model->n_spins; j++){
+                s_j = (state >> (model->n_spins - 1 - j) & 1)*2 -1;
+                *energy += model->J[i][j]*s_i*s_j;
+            }
+            *energy += model->h[i]*s_i;
+        }
+        energy_lookup[state] = -*energy;
+    }
+
+    free(energy);
+
+    return energy_lookup;
+}
 
 Model* mcmc_allocate(int n_spins, double T, int seed){
 
@@ -28,9 +54,8 @@ Model* mcmc_allocate(int n_spins, double T, int seed){
 
     for(int i = 0; i < n_spins; i++){
         model->J[i] = malloc(n_spins*sizeof(double));
-
         for(int j = 0; j < n_spins; j++){
-            *(model->J[i] + j) = gsl_ran_gaussian (r, 1.0);
+            *(model->J[i] + j) = gsl_ran_gaussian (r, 1.0);    
         }
 
         *(model->h + i) = gsl_ran_gaussian (r, 1.0);
@@ -73,10 +98,19 @@ void mcmc_print(Model *model){
     printf ("\n");
 }
 
-Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, int method){
+Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, double *energy_lookup, int method){
+
+    printf("Running trajectories...\n");
+
     Data *simulations = malloc(sizeof(Data));
     simulations->stride = n_trajectories;
 
     return simulations;
 
+}
+
+void mcmc_print_array(double *array, int number_elements){
+    for(int i=0; i<number_elements;i++){
+        printf("%.2f\n", array[i]);
+    }
 }
