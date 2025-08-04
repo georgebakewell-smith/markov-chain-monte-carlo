@@ -3,32 +3,111 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_math.h>
+#include <gsl/gsl_statistics_double.h>
 #include <time.h>
 #include "../include/mcmc.h"
 
-double* mcmc_compute_energies(Model *model, double T){
+Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, double *energy_lookup, int method){
+
+    printf("Running trajectories...\n");
+
+    int n_states, current_state, proposal_state, index;
+    n_states = (int)gsl_pow_int(2, model->n_spins);
+    // Setup rng environment
+    const gsl_rng_type * Type;
+    gsl_rng * r;
+    Type = gsl_rng_default;
+    r = gsl_rng_alloc (Type);
+    
+    Data *simulations = malloc(sizeof(Data));
+    simulations->stride = n_steps;
+    simulations->elements = malloc(n_steps*n_trajectories *sizeof(double));
+    simulations->n_blocks = n_trajectories;
+
+    for(int i=0; i<n_trajectories; i++){
+        gsl_rng_set(r, time(NULL));
+
+        current_state = gsl_rng_uniform_int(r, n_states);
+        simulations->elements[i*n_steps] = current_state;
+
+        for(int j=1; j<n_steps; j++){
+            if(method==0){
+                proposal_state = gsl_rng_uniform_int(r, n_states);
+
+            }else{
+                index = gsl_rng_uniform_int(r, model->n_spins);
+                proposal_state = current_state ^ (1 << (model->n_spins - 1 - index));
+            }
+            double delta_E = energy_lookup[proposal_state] - energy_lookup[current_state];
+
+            if(mcmc_acceptance_MH(delta_E, model->T) > gsl_rng_uniform(r)){
+                current_state = proposal_state;
+            }
+
+            simulations->elements[i*n_steps + j] = current_state;
+        }
+
+        //printf("Trajectory %d done\n", i+1);
+
+    }
+
+    return simulations;
+
+}
+
+void mcmc_get_running_magnetisation(double *average_magnetisation, Data *simulations, double *magnetisation_lookup){
+    printf("Calculating running magnetisation...\n");
+    int stride = simulations->stride;
+    Data *running_magnetisation = malloc(sizeof(Data));
+    running_magnetisation->stride = stride;
+    running_magnetisation->elements = malloc(simulations->n_blocks*simulations->stride*sizeof(double));
+    running_magnetisation->n_blocks = simulations->n_blocks;
+
+    for(int i=0; i<running_magnetisation->n_blocks; i++){
+        running_magnetisation->elements[i*stride] = 0;
+        for(int j=1; j<stride; j++){
+            running_magnetisation->elements[i*stride + j] = (running_magnetisation->elements[i*stride + (j-1)]*j + magnetisation_lookup[(int)simulations->elements[i*stride + j]])/(double)(j+1);
+        }
+    }
+
+    for(int i=0; i<stride; i++){
+        average_magnetisation[i] = gsl_stats_mean(running_magnetisation->elements + i, stride, running_magnetisation->n_blocks);
+    }
+
+    mcmc_free_data(running_magnetisation);
+}
+
+double mcmc_acceptance_MH(const double delta_E, const double T){
+
+    return GSL_MIN(1.0, exp(-delta_E/T));
+}
+
+double** mcmc_compute_lookups(Model *model, double T){
  
     printf("Computing energy lookup table\n");
     int num_states = (int)gsl_pow_int(2, model->n_spins), s_i, s_j;
-    double *energy = malloc(sizeof(double));
-    double *energy_lookup = malloc(num_states*sizeof(double));
+    double **lookups = malloc(2 * sizeof(double *));
+    lookups[0] = malloc(num_states*sizeof(double));
+    lookups[1] = malloc(num_states*sizeof(double));
 
     for(int state=0; state<num_states; state++){
-        *energy = 0;
+        lookups[0][state] = 0;
+        lookups[1][state] = 0;
         for(int i=0; i<model->n_spins; i++){
             s_i = (state >> (model->n_spins - 1 - i) & 1)*2 -1;
+            lookups[1][state] += s_i;
             for(int j=0; j<model->n_spins; j++){
                 s_j = (state >> (model->n_spins - 1 - j) & 1)*2 -1;
-                *energy += model->J[i][j]*s_i*s_j;
+                lookups[0][state] += model->J[i][j]*s_i*s_j;
             }
-            *energy += model->h[i]*s_i;
+            lookups[0][state] += model->h[i]*s_i;
         }
-        energy_lookup[state] = -*energy;
+        lookups[0][state] = -lookups[0][state];
+        lookups[1][state] /= model->n_spins;
+        printf("%.3f\n", lookups[0][state]);
     }
-
-    free(energy);
-
-    return energy_lookup;
+    
+    return lookups;
 }
 
 Model* mcmc_allocate(int n_spins, double T, int seed){
@@ -61,13 +140,10 @@ Model* mcmc_allocate(int n_spins, double T, int seed){
         *(model->h + i) = gsl_ran_gaussian (r, 1.0);
     }
 
-
-    mcmc_print(model);  
-
     return model;
 }
 
-void mcmc_free(Model *model){
+void mcmc_free_model(Model *model){
 
     free(model->h);
     for(int i = 0; i < model->n_spins; i++){
@@ -75,7 +151,15 @@ void mcmc_free(Model *model){
     }
     free(model->J);
     free(model);
-    printf("Free!\n");
+}
+
+void mcmc_free_data(Data *data){
+    if(data != NULL){
+        free(data->elements);
+        free(data);
+    } else {
+        printf("No data to free!\n");
+    }
 }
 
 void mcmc_print(Model *model){
@@ -98,19 +182,64 @@ void mcmc_print(Model *model){
     printf ("\n");
 }
 
-Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, double *energy_lookup, int method){
-
-    printf("Running trajectories...\n");
-
-    Data *simulations = malloc(sizeof(Data));
-    simulations->stride = n_trajectories;
-
-    return simulations;
-
-}
-
 void mcmc_print_array(double *array, int number_elements){
+
     for(int i=0; i<number_elements;i++){
         printf("%.2f\n", array[i]);
     }
+}
+
+void mcmc_write_data_to_csv(const char *filename, double *exact_values, double *array, int length) {
+    FILE *fp = fopen(filename, "w");
+    if (!fp) {
+        perror("Failed to open file");
+        return;
+    }
+    fprintf(fp, "%d\n", length);
+    fprintf(fp, "%f\n", exact_values[0]);
+    fprintf(fp, "%f\n", exact_values[1]);
+
+    for (int i = 0; i < length; i++) {
+        fprintf(fp, "%f\n", array[i]);
+    }
+    fclose(fp);
+}
+
+double mcmc_sum(double *array, int stride, int n){
+    double sum = 0.0;
+    for (int i = 0; i < n; i++) {
+        sum += array[i * stride];
+    }
+    return sum;
+}
+double mcmc_dot(double *a, double *b, int n){
+    double dot_product = 0.0;
+    for (int i = 0; i < n; i++) {
+        dot_product += a[i] * b[i];
+    }
+
+    return dot_product;
+}
+
+double* mcmc_get_exact_values(int n_spins, double T, double *energy_lookup, double *magnetisation_lookup) {
+    double *exact_values = malloc(2 * sizeof(double));
+    int n_states = (int)gsl_pow_int(2, n_spins);
+    double E_min = gsl_stats_min(energy_lookup, 1, n_states);
+
+    double *boltzmann_weight = malloc(n_states * sizeof(double));
+    double *shifted_energy_lookup = malloc(n_states * sizeof(double));
+    for (int i = 0; i < n_states; i++) {
+        shifted_energy_lookup[i] = energy_lookup[i] - E_min;
+        boltzmann_weight[i] = exp(-shifted_energy_lookup[i]/T);
+    }
+    double norm = mcmc_sum(boltzmann_weight, 1, n_states);
+    exact_values[0] = mcmc_dot(shifted_energy_lookup, boltzmann_weight, n_states) / norm;
+    exact_values[1] = mcmc_dot(magnetisation_lookup, boltzmann_weight, n_states) / norm;
+
+    free(boltzmann_weight);
+    free(shifted_energy_lookup);
+
+    printf("Exact values computed: E = %.3f, M = %.3f\n", exact_values[0], exact_values[1]);
+    
+    return exact_values;
 }
