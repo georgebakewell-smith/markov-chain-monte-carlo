@@ -52,27 +52,36 @@ Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, doubl
 
 }
 
-void mcmc_get_running_magnetisation(double *average_magnetisation, double *error, Data *simulations, double *magnetisation_lookup){
+void mcmc_get_averages(double *magnetisation_average, double *magnetisation_error, double *energy_average, double *energy_error, Data *simulations, double *magnetisation_lookup, double *energy_lookup){
     printf("Calculating running magnetisation...\n");
     int stride = simulations->stride;
     Data *running_magnetisation = malloc(sizeof(Data));
+    Data *energies = malloc(sizeof(Data));
+    energies->stride = stride;
+    energies->elements = malloc(simulations->n_blocks*simulations->stride*sizeof(double));
+    energies->n_blocks = simulations->n_blocks;
     running_magnetisation->stride = stride;
     running_magnetisation->elements = malloc(simulations->n_blocks*simulations->stride*sizeof(double));
     running_magnetisation->n_blocks = simulations->n_blocks;
 
     for(int i=0; i<running_magnetisation->n_blocks; i++){
         running_magnetisation->elements[i*stride] = 0;
+        energies->elements[i*stride] = energy_lookup[(int)simulations->elements[i*stride]];
         for(int j=1; j<stride; j++){
             running_magnetisation->elements[i*stride + j] = (running_magnetisation->elements[i*stride + (j-1)]*j + magnetisation_lookup[(int)simulations->elements[i*stride + j]])/(double)(j+1);
+            energies->elements[i*stride + j] = energy_lookup[(int)simulations->elements[i*stride + j]];
         }
     }
 
     for(int i=0; i<stride; i++){
-        average_magnetisation[i] = gsl_stats_mean(running_magnetisation->elements + i, stride, running_magnetisation->n_blocks);
-        error[i] = gsl_stats_sd_m(running_magnetisation->elements + i, stride, running_magnetisation->n_blocks, average_magnetisation[i]);
+        magnetisation_average[i] = gsl_stats_mean(running_magnetisation->elements + i, stride, running_magnetisation->n_blocks);
+        magnetisation_error[i] = gsl_stats_sd_m(running_magnetisation->elements + i, stride, running_magnetisation->n_blocks, magnetisation_average[i]);
+        energy_average[i] = gsl_stats_mean(energies->elements + i, stride, energies->n_blocks);
+        energy_error[i] = gsl_stats_sd_m(energies->elements + i, stride, energies->n_blocks, energy_average[i]);
     }
 
     mcmc_free_data(running_magnetisation);
+    mcmc_free_data(energies);
 }
 
 double mcmc_acceptance_MH(const double delta_E, const double T){
@@ -102,6 +111,7 @@ double** mcmc_compute_lookups(Model *model, double T){
         }
         lookups[0][state] = -lookups[0][state];
         lookups[1][state] /= model->n_spins;
+        //printf("State %d: E = %.3f, M = %.3f\n", state, lookups[0][state], lookups[1][state]);
     }
     
     return lookups;
@@ -186,7 +196,7 @@ void mcmc_print_array(double *array, int number_elements){
     }
 }
 
-void mcmc_write_data_to_csv(const char *filename, double *exact_values, double *array1, double *array2, int length) {
+void mcmc_write_data_to_csv(const char *filename, double *exact_values, double *array_mag, double *array_mag_error, double *array_energy, double *array_energy_error, int length) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         perror("Failed to open file");
@@ -198,13 +208,21 @@ void mcmc_write_data_to_csv(const char *filename, double *exact_values, double *
     fprintf(fp, "%f\n", exact_values[0]);
     fprintf(fp, "%f\n", exact_values[1]);
 
-    // Write array1
+    // Write magnetisation averages
     for (int i = 0; i < length; i++) {
-        fprintf(fp, "%f\n", array1[i]);
+        fprintf(fp, "%f\n", array_mag[i]);
     }
-    // Write array2
+    // Write magnetisation errors
     for (int i = 0; i < length; i++) {
-        fprintf(fp, "%f\n", array2[i]);
+        fprintf(fp, "%f\n", array_mag_error[i]);
+    }
+    // Write energy averages
+    for (int i = 0; i < length; i++) {
+        fprintf(fp, "%f\n", array_energy[i]);
+    }
+    // Write energy errors
+    for (int i = 0; i < length; i++) {
+        fprintf(fp, "%f\n", array_energy_error[i]);
     }
     fclose(fp);
 }
@@ -237,7 +255,7 @@ double* mcmc_get_exact_values(int n_spins, double T, double *energy_lookup, doub
         boltzmann_weight[i] = exp(-shifted_energy_lookup[i]/T);
     }
     double norm = mcmc_sum(boltzmann_weight, 1, n_states);
-    exact_values[0] = mcmc_dot(shifted_energy_lookup, boltzmann_weight, n_states) / norm;
+    exact_values[0] = mcmc_dot(energy_lookup, boltzmann_weight, n_states) / norm;
     exact_values[1] = mcmc_dot(magnetisation_lookup, boltzmann_weight, n_states) / norm;
 
     free(boltzmann_weight);
