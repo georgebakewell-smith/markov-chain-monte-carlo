@@ -4,6 +4,7 @@
 # Other
 *.json
 *.txt
+*.csv
 
 # Filenames
 main

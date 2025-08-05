@@ -18,6 +18,7 @@ Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, doubl
     gsl_rng * r;
     Type = gsl_rng_default;
     r = gsl_rng_alloc (Type);
+    gsl_rng_set(r, time(NULL));
     
     Data *simulations = malloc(sizeof(Data));
     simulations->stride = n_steps;
@@ -25,7 +26,6 @@ Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, doubl
     simulations->n_blocks = n_trajectories;
 
     for(int i=0; i<n_trajectories; i++){
-        gsl_rng_set(r, time(NULL));
 
         current_state = gsl_rng_uniform_int(r, n_states);
         simulations->elements[i*n_steps] = current_state;
@@ -46,16 +46,13 @@ Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, doubl
 
             simulations->elements[i*n_steps + j] = current_state;
         }
-
-        //printf("Trajectory %d done\n", i+1);
-
     }
 
     return simulations;
 
 }
 
-void mcmc_get_running_magnetisation(double *average_magnetisation, Data *simulations, double *magnetisation_lookup){
+void mcmc_get_running_magnetisation(double *average_magnetisation, double *error, Data *simulations, double *magnetisation_lookup){
     printf("Calculating running magnetisation...\n");
     int stride = simulations->stride;
     Data *running_magnetisation = malloc(sizeof(Data));
@@ -72,6 +69,7 @@ void mcmc_get_running_magnetisation(double *average_magnetisation, Data *simulat
 
     for(int i=0; i<stride; i++){
         average_magnetisation[i] = gsl_stats_mean(running_magnetisation->elements + i, stride, running_magnetisation->n_blocks);
+        error[i] = gsl_stats_sd_m(running_magnetisation->elements + i, stride, running_magnetisation->n_blocks, average_magnetisation[i]);
     }
 
     mcmc_free_data(running_magnetisation);
@@ -104,7 +102,6 @@ double** mcmc_compute_lookups(Model *model, double T){
         }
         lookups[0][state] = -lookups[0][state];
         lookups[1][state] /= model->n_spins;
-        printf("%.3f\n", lookups[0][state]);
     }
     
     return lookups;
@@ -189,18 +186,25 @@ void mcmc_print_array(double *array, int number_elements){
     }
 }
 
-void mcmc_write_data_to_csv(const char *filename, double *exact_values, double *array, int length) {
+void mcmc_write_data_to_csv(const char *filename, double *exact_values, double *array1, double *array2, int length) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         perror("Failed to open file");
         return;
     }
+
+    // Data parameters
     fprintf(fp, "%d\n", length);
     fprintf(fp, "%f\n", exact_values[0]);
     fprintf(fp, "%f\n", exact_values[1]);
 
+    // Write array1
     for (int i = 0; i < length; i++) {
-        fprintf(fp, "%f\n", array[i]);
+        fprintf(fp, "%f\n", array1[i]);
+    }
+    // Write array2
+    for (int i = 0; i < length; i++) {
+        fprintf(fp, "%f\n", array2[i]);
     }
     fclose(fp);
 }
