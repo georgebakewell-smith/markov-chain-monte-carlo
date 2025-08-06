@@ -1,19 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <gsl/gsl_math.h>
 #include "../include/mcmc.h"
 
 int main (void)
 {
-    // Load configuration from file
-    printf("Loading configuration...\n");
-    // Open the config file
-    FILE *fp = fopen("config.txt", "r");
-    if (!fp) {
-        perror("config.txt");
-        return 1;
-    }
 
     // Default variables for known parameters
     int n_spins = 4;
@@ -22,34 +13,21 @@ int main (void)
     double T = 0.1;
     int model_type = 0;
 
-    char key[50];
-    char value[50];
-
-    while (fscanf(fp, " %49[^=]=%49s", key, value) == 2) {
-        if (strcmp(key, "n_spins") == 0) {
-            n_spins = atoi(value);
-        } else if (strcmp(key, "n_steps") == 0) {
-            n_steps = atoi(value);
-        } else if (strcmp(key, "n_trajectories") == 0) {
-            n_trajectories = atoi(value);
-        } else if (strcmp(key, "T") == 0) {
-            T = atof(value);
-        } else if (strcmp(key, "model_type") == 0) {
-            model_type = atoi(value);
-        }
+    if(mcmc_load_config(&n_spins, &n_steps, &n_trajectories, &T, &model_type) == 0){
+        printf("Configuration loaded: n_spins=%d, n_steps=%d, n_trajectories=%d, T=%.2f, model_type=%d\n", n_spins, n_steps, n_trajectories, T, model_type);
+    } else{
+        return 1;
     }
-    fclose(fp);
-    printf("Configuration loaded: n_spins=%d, n_steps=%d, n_trajectories=%d, T=%.2f, model_type=%d\n", n_spins, n_steps, n_trajectories, T, model_type);
 
     int method1 = 0, method2 = 1;
 
     Model *model = mcmc_allocate(n_spins, T, model_type, -1);
-    mcmc_print(model);
+    //mcmc_print(model);
     double **lookups = mcmc_compute_lookups(model, T);
     double *energy_lookup = lookups[0];
     double *magnetisation_lookup = lookups[1];
     free(lookups);
-    double *exact_values = mcmc_get_exact_values(n_spins, T, energy_lookup, magnetisation_lookup);
+    double *exact_values = mcmc_get_exact_values(model->n_spins, T, energy_lookup, magnetisation_lookup);
     double *magnetisation_average_uniform = malloc(n_steps*sizeof(double));
     double *magnetisation_average_local = malloc(n_steps*sizeof(double));
     double *uniform_mag_error = malloc(n_steps*sizeof(double));

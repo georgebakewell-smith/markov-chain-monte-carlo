@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_math.h>
@@ -12,13 +13,21 @@ Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, doubl
     printf("Running trajectories...\n");
 
     int n_states, current_state, proposal_state, index;
-    n_states = (int)gsl_pow_int(2, model->n_spins);
+    //n_states = (int)gsl_pow_int(2, model->n_spins);
+    n_states = 1UL << model->n_spins;
+    printf("Number of states is : %d\n", n_states);
     // Setup rng environment
     const gsl_rng_type * Type;
     gsl_rng * r;
     Type = gsl_rng_default;
     r = gsl_rng_alloc (Type);
     gsl_rng_set(r, time(NULL));
+
+    // Compute flip states
+    unsigned long *flip_masks = malloc((size_t)model->n_spins * sizeof(unsigned long));
+    for (int i = 0; i < model->n_spins; i++) {
+        flip_masks[i] = 1UL << (model->n_spins - 1 - i);
+    }
     
     Data *simulations = malloc(sizeof(Data));
     simulations->stride = n_steps;
@@ -36,7 +45,7 @@ Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, doubl
 
             }else{
                 index = gsl_rng_uniform_int(r, model->n_spins);
-                proposal_state = current_state ^ (1 << (model->n_spins - 1 - index));
+                proposal_state = current_state ^ flip_masks[index];
             }
             double delta_E = energy_lookup[proposal_state] - energy_lookup[current_state];
 
@@ -48,6 +57,8 @@ Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, doubl
         }
     }
 
+    free(flip_masks);
+    
     return simulations;
 
 }
@@ -157,9 +168,9 @@ Model* mcmc_allocate(int n_spins, double T, int model_type, int seed){
     } else if(model_type == 1){
         for(int i = 0; i < n_spins; i++){
             for(int j = i; j < n_spins; j++){
-                if(i+1 == j || i-1 == j){
+                if(i+1 == j){
                 model->J[i][j] = gsl_ran_gaussian (r, 1.0);
-                model->J[j][i] = *(model->J[i] + j); // Ensure symmetry
+                model->J[j][i] = model->J[i][j]; // Ensure symmetry
                 } else{
                 model->J[i][j] = 0.0;
                 model->J[j][i] = 0.0;
@@ -167,6 +178,23 @@ Model* mcmc_allocate(int n_spins, double T, int model_type, int seed){
             }
 
             model->h[i] = gsl_ran_gaussian (r, 1.0);
+        }
+    } else if(model_type == 2){
+        double J_default[] = {-0.99121054, 0.84436089, -0.83043895, 0.95766024, -1.02814718, 1.24969204, 0.81649925, -0.92147578, 1.11394418};
+        double h_default[] = {0.47921821, 0.10207621, -0.4780673, -0.39407213, 0.15239487, 0.44938277, 0.91715616, 0.73303354, 0.40145444, 0.55915183};
+        model->n_spins = sizeof(h_default)/sizeof(h_default[0]);
+        for(int i = 0; i < n_spins; i++){
+            for(int j = i; j < n_spins; j++){
+                if(i+1 == j){
+                model->J[i][j] = J_default[i];
+                //model->J[j][i] = model->J[i][j]; // Ensure symmetry
+                } else{
+                model->J[i][j] = 0.0;
+                model->J[j][i] = 0.0;
+                } 
+            }
+
+            model->h[i] = h_default[i];
         }
     }
 
@@ -287,4 +315,36 @@ double* mcmc_get_exact_values(int n_spins, double T, double *energy_lookup, doub
     printf("Exact values computed: E = %.3f, M = %.3f\n", exact_values[0], exact_values[1]);
     
     return exact_values;
+}
+
+int mcmc_load_config(int *n_spins, int *n_steps, int *n_trajectories, double *T, int *model_type){
+
+    // Load configuration from file
+    printf("Loading configuration...\n");
+    // Open the config file
+    FILE *fp = fopen("config.txt", "r");
+    if (!fp) {
+        perror("config.txt");
+        return 1;
+    }
+
+    char key[50];
+    char value[50];
+
+    while (fscanf(fp, " %49[^=]=%49s", key, value) == 2) {
+        if (strcmp(key, "n_spins") == 0) {
+            *n_spins = atoi(value);
+        } else if (strcmp(key, "n_steps") == 0) {
+            *n_steps = atoi(value);
+        } else if (strcmp(key, "n_trajectories") == 0) {
+            *n_trajectories = atoi(value);
+        } else if (strcmp(key, "T") == 0) {
+            *T = atof(value);
+        } else if (strcmp(key, "model_type") == 0) {
+            *model_type = atoi(value);
+        }
+    }
+    fclose(fp);
+
+    return 0;
 }

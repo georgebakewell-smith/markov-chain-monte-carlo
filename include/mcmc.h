@@ -27,5 +27,6 @@ void mcmc_write_data_to_csv(const char *filename, double *exact_values, double *
 double* mcmc_get_exact_values(int n_spins, double T, double *energy_lookup, double *magnetisation_lookup);
 double mcmc_sum(double *array, int stride, int n);
 double mcmc_dot(double *a, double *b, int n);
+int mcmc_load_config(int *n_spins, int *n_steps, int *n_trajectories, double *T, int *model_type);
 
 #endif
