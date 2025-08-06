@@ -117,7 +117,7 @@ double** mcmc_compute_lookups(Model *model, double T){
     return lookups;
 }
 
-Model* mcmc_allocate(int n_spins, double T, int seed){
+Model* mcmc_allocate(int n_spins, double T, int model_type, int seed){
 
     // Setup rng environment
     const gsl_rng_type * Type;
@@ -137,14 +137,37 @@ Model* mcmc_allocate(int n_spins, double T, int seed){
     model->T = T;
     model->h = malloc(n_spins*sizeof(double));
     model->J = malloc(n_spins*sizeof(double *));
-
     for(int i = 0; i < n_spins; i++){
         model->J[i] = malloc(n_spins*sizeof(double));
-        for(int j = 0; j < n_spins; j++){
-            *(model->J[i] + j) = gsl_ran_gaussian (r, 1.0);    
-        }
+    }
 
-        *(model->h + i) = gsl_ran_gaussian (r, 1.0);
+    if(model_type == 0){
+        for(int i = 0; i < n_spins; i++){           
+            for(int j = i; j < n_spins; j++){
+                if(i!=j){
+                    model->J[i][j] = gsl_ran_gaussian (r, 1.0);
+                    model->J[j][i] = *(model->J[i] + j); // Ensure symmetry
+                } else{
+                    model->J[i][j] = 0.0; // Diagonal elements are zero
+                }
+            }
+
+            model->h[i] = gsl_ran_gaussian (r, 1.0);
+        }
+    } else if(model_type == 1){
+        for(int i = 0; i < n_spins; i++){
+            for(int j = i; j < n_spins; j++){
+                if(i+1 == j || i-1 == j){
+                model->J[i][j] = gsl_ran_gaussian (r, 1.0);
+                model->J[j][i] = *(model->J[i] + j); // Ensure symmetry
+                } else{
+                model->J[i][j] = 0.0;
+                model->J[j][i] = 0.0;
+                } 
+            }
+
+            model->h[i] = gsl_ran_gaussian (r, 1.0);
+        }
     }
 
     return model;

@@ -14,7 +14,7 @@ typedef struct {
     int n_blocks;
 } Data;
 
-Model *mcmc_allocate(int n_spins, double T, int seed);
+Model *mcmc_allocate(int n_spins, double T, int model_type, int seed);
 void mcmc_free_model(Model *model);
 void mcmc_free_data(Data *data);
 void mcmc_print(Model *model);

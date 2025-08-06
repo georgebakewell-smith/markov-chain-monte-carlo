@@ -20,6 +20,7 @@ int main (void)
     int n_steps = 100;
     int n_trajectories = 10;
     double T = 0.1;
+    int model_type = 0;
 
     char key[50];
     char value[50];
@@ -33,14 +34,17 @@ int main (void)
             n_trajectories = atoi(value);
         } else if (strcmp(key, "T") == 0) {
             T = atof(value);
+        } else if (strcmp(key, "model_type") == 0) {
+            model_type = atoi(value);
         }
     }
     fclose(fp);
-    printf("Configuration loaded: n_spins=%d, n_steps=%d, n_trajectories=%d, T=%.2f\n", n_spins, n_steps, n_trajectories, T);
+    printf("Configuration loaded: n_spins=%d, n_steps=%d, n_trajectories=%d, T=%.2f, model_type=%d\n", n_spins, n_steps, n_trajectories, T, model_type);
 
     int method1 = 0, method2 = 1;
 
-    Model *model = mcmc_allocate(n_spins, T, -1);
+    Model *model = mcmc_allocate(n_spins, T, model_type, -1);
+    mcmc_print(model);
     double **lookups = mcmc_compute_lookups(model, T);
     double *energy_lookup = lookups[0];
     double *magnetisation_lookup = lookups[1];
