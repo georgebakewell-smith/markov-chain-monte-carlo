@@ -1,5 +1,6 @@
 CC = gcc
 CFLAGS = -g -Wall -std=c99
+#CFLAGS = -std=c99 -mtune=native -O3
 SRC = src
 OBJ = obj
 SRCS = $(wildcard $(SRC)/*.c)

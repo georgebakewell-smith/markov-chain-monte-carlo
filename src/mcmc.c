@@ -8,52 +8,49 @@
 #include <time.h>
 #include "../include/mcmc.h"
 
-Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, double *energy_lookup, int method){
+Data_int *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, double *energy_lookup, int method, gsl_rng *r){
 
     printf("Running trajectories...\n");
 
-    int n_states, current_state, proposal_state, index;
-    //n_states = (int)gsl_pow_int(2, model->n_spins);
-    n_states = 1UL << model->n_spins;
-    printf("Number of states is : %d\n", n_states);
-    // Setup rng environment
-    const gsl_rng_type * Type;
-    gsl_rng * r;
-    Type = gsl_rng_default;
-    r = gsl_rng_alloc (Type);
-    gsl_rng_set(r, time(NULL));
+    size_t current_state, proposal_state, index;
+    const int n_spins = model->n_spins;
+    const size_t n_states = 1UL << n_spins;
+    const double T = model->T;
 
     // Compute flip states
-    unsigned long *flip_masks = malloc((size_t)model->n_spins * sizeof(unsigned long));
-    for (int i = 0; i < model->n_spins; i++) {
-        flip_masks[i] = 1UL << (model->n_spins - 1 - i);
+    unsigned long *flip_masks = malloc((size_t)n_spins * sizeof(unsigned long));
+    for (int i = 0; i < n_spins; i++) {
+        flip_masks[i] = 1UL << (n_spins - 1 - i);
     }
     
-    Data *simulations = malloc(sizeof(Data));
+    Data_int *simulations = malloc(sizeof(Data_int));
     simulations->stride = n_steps;
-    simulations->elements = malloc(n_steps*n_trajectories *sizeof(double));
+    simulations->elements = malloc(n_steps*n_trajectories *sizeof(size_t));
     simulations->n_blocks = n_trajectories;
 
     for(int i=0; i<n_trajectories; i++){
 
         current_state = gsl_rng_uniform_int(r, n_states);
-        simulations->elements[i*n_steps] = current_state;
+
+        size_t *trajectory = simulations->elements + i*n_steps;
+
+        trajectory[0] = current_state;
 
         for(int j=1; j<n_steps; j++){
             if(method==0){
                 proposal_state = gsl_rng_uniform_int(r, n_states);
 
             }else{
-                index = gsl_rng_uniform_int(r, model->n_spins);
+                index = gsl_rng_uniform_int(r, n_spins);
                 proposal_state = current_state ^ flip_masks[index];
             }
             double delta_E = energy_lookup[proposal_state] - energy_lookup[current_state];
 
-            if(mcmc_acceptance_MH(delta_E, model->T) > gsl_rng_uniform(r)){
+            if(GSL_MIN(1.0, exp(-delta_E/T)) > gsl_rng_uniform(r)){
                 current_state = proposal_state;
             }
 
-            simulations->elements[i*n_steps + j] = current_state;
+            trajectory[j] = current_state;
         }
     }
 
@@ -63,11 +60,11 @@ Data *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, doubl
 
 }
 
-void mcmc_get_averages(double *magnetisation_average, double *magnetisation_error, double *energy_average, double *energy_error, Data *simulations, double *magnetisation_lookup, double *energy_lookup){
+void mcmc_get_averages(double *magnetisation_average, double *magnetisation_error, double *energy_average, double *energy_error, Data_int *simulations, double *magnetisation_lookup, double *energy_lookup){
     printf("Calculating running magnetisation...\n");
     int stride = simulations->stride;
-    Data *running_magnetisation = malloc(sizeof(Data));
-    Data *energies = malloc(sizeof(Data));
+    Data_lf *running_magnetisation = malloc(sizeof(Data_lf));
+    Data_lf *energies = malloc(sizeof(Data_lf));
     energies->stride = stride;
     energies->elements = malloc(simulations->n_blocks*simulations->stride*sizeof(double));
     energies->n_blocks = simulations->n_blocks;
@@ -77,10 +74,10 @@ void mcmc_get_averages(double *magnetisation_average, double *magnetisation_erro
 
     for(int i=0; i<running_magnetisation->n_blocks; i++){
         running_magnetisation->elements[i*stride] = 0;
-        energies->elements[i*stride] = energy_lookup[(int)simulations->elements[i*stride]];
+        energies->elements[i*stride] = energy_lookup[simulations->elements[i*stride]];
         for(int j=1; j<stride; j++){
-            running_magnetisation->elements[i*stride + j] = (running_magnetisation->elements[i*stride + (j-1)]*j + magnetisation_lookup[(int)simulations->elements[i*stride + j]])/(double)(j+1);
-            energies->elements[i*stride + j] = energy_lookup[(int)simulations->elements[i*stride + j]];
+            running_magnetisation->elements[i*stride + j] = (running_magnetisation->elements[i*stride + (j-1)]*j + magnetisation_lookup[simulations->elements[i*stride + j]])/(j+1);
+            energies->elements[i*stride + j] = energy_lookup[simulations->elements[i*stride + j]];
         }
     }
 
@@ -91,8 +88,8 @@ void mcmc_get_averages(double *magnetisation_average, double *magnetisation_erro
         energy_error[i] = gsl_stats_sd_m(energies->elements + i, stride, energies->n_blocks, energy_average[i]);
     }
 
-    mcmc_free_data(running_magnetisation);
-    mcmc_free_data(energies);
+    mcmc_free_data_lf(running_magnetisation);
+    mcmc_free_data_lf(energies);
 }
 
 double mcmc_acceptance_MH(const double delta_E, const double T){
@@ -211,7 +208,16 @@ void mcmc_free_model(Model *model){
     free(model);
 }
 
-void mcmc_free_data(Data *data){
+void mcmc_free_data_lf(Data_lf *data){
+    if(data != NULL){
+        free(data->elements);
+        free(data);
+    } else {
+        printf("No data to free!\n");
+    }
+}
+
+void mcmc_free_data_int(Data_int *data){
     if(data != NULL){
         free(data->elements);
         free(data);

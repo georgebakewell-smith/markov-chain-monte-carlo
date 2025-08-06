@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+#include <gsl/gsl_rng.h>
 #include <gsl/gsl_math.h>
 #include "../include/mcmc.h"
 
@@ -37,16 +39,29 @@ int main (void)
     double *energy_error_uniform = malloc(n_steps*sizeof(double));
     double *energy_error_local = malloc(n_steps*sizeof(double));
 
+    // Setup rng environment
+    const gsl_rng_type * Type;
+    gsl_rng * r;
+    Type = gsl_rng_default;
+    r = gsl_rng_alloc (Type);
+    gsl_rng_set(r, time(NULL));
+
+    clock_t start = clock();
+
     // Running simulations
-    Data *uniform_simulations = mcmc_run_trajectories(model, n_steps, n_trajectories, energy_lookup, method1);
-    Data *local_simulations = mcmc_run_trajectories(model, n_steps, n_trajectories, energy_lookup, method2);
+    Data_int *uniform_simulations = mcmc_run_trajectories(model, n_steps, n_trajectories, energy_lookup, method1, r);
+    Data_int *local_simulations = mcmc_run_trajectories(model, n_steps, n_trajectories, energy_lookup, method2, r);
+
+    clock_t end = clock();
+    double seconds = (double)(end - start) / CLOCKS_PER_SEC;
+
     mcmc_free_model(model);
 
     // Data processing
     mcmc_get_averages(magnetisation_average_uniform, uniform_mag_error, energy_average_uniform, energy_error_uniform, uniform_simulations, magnetisation_lookup, energy_lookup);
-    mcmc_free_data(uniform_simulations);
+    mcmc_free_data_int(uniform_simulations);
     mcmc_get_averages(magnetisation_average_local, local_mag_error, energy_average_local, energy_error_local, local_simulations, magnetisation_lookup, energy_lookup);
-    mcmc_free_data(local_simulations); 
+    mcmc_free_data_int(local_simulations); 
     
     free(magnetisation_lookup);
     free(energy_lookup);
@@ -63,9 +78,10 @@ int main (void)
     free(energy_average_local);
     free(energy_error_uniform);
     free(energy_error_local);
+    //gsl_rng_free(r);
 
     printf("Model and data structures freed successfully!\n");
-    printf("Simulation completed successfully!\n");
+    printf("Simulation completed successfully in %.2f seconds.\n", seconds);
 
     return 0;
 }
