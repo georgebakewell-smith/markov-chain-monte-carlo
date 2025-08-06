@@ -91,7 +91,7 @@ double mcmc_acceptance_MH(const double delta_E, const double T){
 
 double** mcmc_compute_lookups(Model *model, double T){
  
-    printf("Computing energy lookup table\n");
+    printf("Computing energy lookup table...\n");
     int num_states = (int)gsl_pow_int(2, model->n_spins), s_i, s_j;
     double **lookups = malloc(2 * sizeof(double *));
     lookups[0] = malloc(num_states*sizeof(double));
