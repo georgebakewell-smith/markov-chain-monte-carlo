@@ -18,7 +18,8 @@ int main (void)
     if(mcmc_load_config(&n_spins, &n_steps, &n_trajectories, &T, &model_type) == 0){
         printf("Configuration loaded: n_spins=%d, n_steps=%d, n_trajectories=%d, T=%.2f, model_type=%d\n", n_spins, n_steps, n_trajectories, T, model_type);
     } else{
-        return 1;
+        printf("Failed to load configuration, using default values.\n");
+        printf("n_spins=%d, n_steps=%d, n_trajectories=%d, T=%.2f, model_type=%d\n", n_spins, n_steps, n_trajectories, T, model_type);
     }
 
     int method1 = 0, method2 = 1;
@@ -46,22 +47,24 @@ int main (void)
     r = gsl_rng_alloc (Type);
     gsl_rng_set(r, time(NULL));
 
-    clock_t start = clock();
+    
 
     // Running simulations
     Data_int *uniform_simulations = mcmc_run_trajectories(model, n_steps, n_trajectories, energy_lookup, method1, r);
     Data_int *local_simulations = mcmc_run_trajectories(model, n_steps, n_trajectories, energy_lookup, method2, r);
 
-    clock_t end = clock();
-    double seconds = (double)(end - start) / CLOCKS_PER_SEC;
+    
 
     mcmc_free_model(model);
 
     // Data processing
+    clock_t start = clock();
     mcmc_get_averages(magnetisation_average_uniform, uniform_mag_error, energy_average_uniform, energy_error_uniform, uniform_simulations, magnetisation_lookup, energy_lookup);
     mcmc_free_data_int(uniform_simulations);
     mcmc_get_averages(magnetisation_average_local, local_mag_error, energy_average_local, energy_error_local, local_simulations, magnetisation_lookup, energy_lookup);
-    mcmc_free_data_int(local_simulations); 
+    mcmc_free_data_int(local_simulations);
+    clock_t end = clock();
+    double seconds = (double)(end - start) / CLOCKS_PER_SEC; 
     
     free(magnetisation_lookup);
     free(energy_lookup);
@@ -78,7 +81,7 @@ int main (void)
     free(energy_average_local);
     free(energy_error_uniform);
     free(energy_error_local);
-    //gsl_rng_free(r);
+    gsl_rng_free(r);
 
     printf("Model and data structures freed successfully!\n");
     printf("Simulation completed successfully in %.2f seconds.\n", seconds);

@@ -16,6 +16,7 @@ Data_int *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, d
     const int n_spins = model->n_spins;
     const size_t n_states = 1UL << n_spins;
     const double T = model->T;
+    double delta_E;
 
     // Compute flip states
     unsigned long *flip_masks = malloc((size_t)n_spins * sizeof(unsigned long));
@@ -44,7 +45,7 @@ Data_int *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, d
                 index = gsl_rng_uniform_int(r, n_spins);
                 proposal_state = current_state ^ flip_masks[index];
             }
-            double delta_E = energy_lookup[proposal_state] - energy_lookup[current_state];
+            delta_E = energy_lookup[proposal_state] - energy_lookup[current_state];
 
             if(GSL_MIN(1.0, exp(-delta_E/T)) > gsl_rng_uniform(r)){
                 current_state = proposal_state;
@@ -73,11 +74,17 @@ void mcmc_get_averages(double *magnetisation_average, double *magnetisation_erro
     running_magnetisation->n_blocks = simulations->n_blocks;
 
     for(int i=0; i<running_magnetisation->n_blocks; i++){
-        running_magnetisation->elements[i*stride] = 0;
-        energies->elements[i*stride] = energy_lookup[simulations->elements[i*stride]];
+        int block_index = i*stride;  // Index for the start of the block
+        size_t *trajectory_simulation = simulations->elements + block_index;
+        double *trajectory_magnetisation = running_magnetisation->elements + block_index;
+        double *trajectory_energy = energies->elements + block_index;
+        trajectory_magnetisation[0] = 0;
+        trajectory_energy[0] = energy_lookup[simulations->elements[block_index]];
+        //running_magnetisation->elements[i*stride] = 0;
+        //energies->elements[i*stride] = energy_lookup[simulations->elements[i*stride]];
         for(int j=1; j<stride; j++){
-            running_magnetisation->elements[i*stride + j] = (running_magnetisation->elements[i*stride + (j-1)]*j + magnetisation_lookup[simulations->elements[i*stride + j]])/(j+1);
-            energies->elements[i*stride + j] = energy_lookup[simulations->elements[i*stride + j]];
+            trajectory_magnetisation[j] = (trajectory_magnetisation[j-1]*j + magnetisation_lookup[trajectory_simulation[j]])/(j+1);
+            trajectory_energy[j] = energy_lookup[trajectory_simulation[j]];
         }
     }
 
