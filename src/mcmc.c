@@ -64,39 +64,61 @@ Data_int *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, d
 void mcmc_get_averages(double *magnetisation_average, double *magnetisation_error, double *energy_average, double *energy_error, Data_int *simulations, double *magnetisation_lookup, double *energy_lookup){
     printf("Calculating running magnetisation...\n");
     int stride = simulations->stride;
+    int n_blocks = simulations->n_blocks;
     Data_lf *running_magnetisation = malloc(sizeof(Data_lf));
     Data_lf *energies = malloc(sizeof(Data_lf));
-    energies->stride = stride;
-    energies->elements = malloc(simulations->n_blocks*simulations->stride*sizeof(double));
-    energies->n_blocks = simulations->n_blocks;
-    running_magnetisation->stride = stride;
+    double *mag_old_mean = malloc(stride*sizeof(double));
+    double *energy_old_mean = malloc(stride*sizeof(double));
+    //double *magnetisation_average = malloc(stride*sizeof(double));
+    //double *magnetisation_error = malloc(stride*sizeof(double));
+    energies->elements = malloc(n_blocks*simulations->stride*sizeof(double));
     running_magnetisation->elements = malloc(simulations->n_blocks*simulations->stride*sizeof(double));
-    running_magnetisation->n_blocks = simulations->n_blocks;
 
-    for(int i=0; i<running_magnetisation->n_blocks; i++){
+    for(int i=0; i<n_blocks; i++){
         int block_index = i*stride;  // Index for the start of the block
         size_t *trajectory_simulation = simulations->elements + block_index;
         double *trajectory_magnetisation = running_magnetisation->elements + block_index;
         double *trajectory_energy = energies->elements + block_index;
         trajectory_magnetisation[0] = 0;
         trajectory_energy[0] = energy_lookup[simulations->elements[block_index]];
-        //running_magnetisation->elements[i*stride] = 0;
-        //energies->elements[i*stride] = energy_lookup[simulations->elements[i*stride]];
+
+        // Compute average over trajectories using Wilford's algorithm
+        
+        mcmc_welford_step(magnetisation_average, magnetisation_error, trajectory_magnetisation, mag_old_mean, n_blocks, i, 0);
+        mcmc_welford_step(energy_average, energy_error, trajectory_energy, energy_old_mean, n_blocks, i, 0);
+
         for(int j=1; j<stride; j++){
             trajectory_magnetisation[j] = (trajectory_magnetisation[j-1]*j + magnetisation_lookup[trajectory_simulation[j]])/(j+1);
             trajectory_energy[j] = energy_lookup[trajectory_simulation[j]];
+
+            mcmc_welford_step(magnetisation_average, magnetisation_error, trajectory_magnetisation, mag_old_mean, n_blocks, i, j);
+            mcmc_welford_step(energy_average, energy_error, trajectory_energy, energy_old_mean, n_blocks, i, j);
+            
         }
     }
 
-    for(int i=0; i<stride; i++){
-        magnetisation_average[i] = gsl_stats_mean(running_magnetisation->elements + i, stride, running_magnetisation->n_blocks);
-        magnetisation_error[i] = gsl_stats_sd_m(running_magnetisation->elements + i, stride, running_magnetisation->n_blocks, magnetisation_average[i]);
-        energy_average[i] = gsl_stats_mean(energies->elements + i, stride, energies->n_blocks);
-        energy_error[i] = gsl_stats_sd_m(energies->elements + i, stride, energies->n_blocks, energy_average[i]);
-    }
-
+    free(mag_old_mean);
+    free(energy_old_mean);
     mcmc_free_data_lf(running_magnetisation);
     mcmc_free_data_lf(energies);
+}
+
+void mcmc_welford_step(double *average, double *error, double *trajectory, double *old_mean, int n_blocks, int i, int j){
+    /* 
+        Applie Welford's algorithm to the (i,j) data element in the data block to compute the sample mean and variance as the magnetisation and energy values are computed
+    */
+    if(i == 0){
+        average[j] = 0;
+        error[j] = 0;
+    }
+
+    old_mean[j] = average[j];
+    average[j] = average[j] + (trajectory[j] - average[j])/(i+1);
+    error[j] = error[j] + (trajectory[j] - old_mean[j])*(trajectory[j] - average[j]);
+    
+    if(i == n_blocks - 1){
+        error[j] = sqrt(error[j]/(n_blocks - 1));
+    }
 }
 
 double mcmc_acceptance_MH(const double delta_E, const double T){

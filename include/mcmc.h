@@ -37,5 +37,6 @@ double* mcmc_get_exact_values(int n_spins, double T, double *energy_lookup, doub
 double mcmc_sum(double *array, int stride, int n);
 double mcmc_dot(double *a, double *b, int n);
 int mcmc_load_config(int *n_spins, int *n_steps, int *n_trajectories, double *T, int *model_type);
+void mcmc_welford_step(double *average, double *error, double *trajectory, double *old_mean, int n_blocks, int i, int j);
 
 #endif

@@ -47,13 +47,9 @@ int main (void)
     r = gsl_rng_alloc (Type);
     gsl_rng_set(r, time(NULL));
 
-    
-
     // Running simulations
     Data_int *uniform_simulations = mcmc_run_trajectories(model, n_steps, n_trajectories, energy_lookup, method1, r);
     Data_int *local_simulations = mcmc_run_trajectories(model, n_steps, n_trajectories, energy_lookup, method2, r);
-
-    
 
     mcmc_free_model(model);
 

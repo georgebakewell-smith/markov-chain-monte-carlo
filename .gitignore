@@ -5,6 +5,7 @@
 *.json
 *.txt
 *.csv
+*.pdf
 
 # Filenames
 main
