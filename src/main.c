@@ -48,19 +48,19 @@ int main (void)
     gsl_rng_set(r, time(NULL));
 
     // Running simulations
+    clock_t start = clock();
     Data_int *uniform_simulations = mcmc_run_trajectories(model, n_steps, n_trajectories, energy_lookup, method1, r);
     Data_int *local_simulations = mcmc_run_trajectories(model, n_steps, n_trajectories, energy_lookup, method2, r);
-
+    clock_t end = clock();
+    double seconds = (double)(end - start) / CLOCKS_PER_SEC; 
     mcmc_free_model(model);
 
     // Data processing
-    clock_t start = clock();
+    
     mcmc_get_averages(magnetisation_average_uniform, uniform_mag_error, energy_average_uniform, energy_error_uniform, uniform_simulations, magnetisation_lookup, energy_lookup);
-    mcmc_free_data_int(uniform_simulations);
+    mcmc_free_data(uniform_simulations);
     mcmc_get_averages(magnetisation_average_local, local_mag_error, energy_average_local, energy_error_local, local_simulations, magnetisation_lookup, energy_lookup);
-    mcmc_free_data_int(local_simulations);
-    clock_t end = clock();
-    double seconds = (double)(end - start) / CLOCKS_PER_SEC; 
+    mcmc_free_data(local_simulations);
     
     free(magnetisation_lookup);
     free(energy_lookup);

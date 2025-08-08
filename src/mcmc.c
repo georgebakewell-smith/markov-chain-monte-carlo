@@ -46,9 +46,12 @@ Data_int *mcmc_run_trajectories(Model *model, int n_steps, int n_trajectories, d
                 proposal_state = current_state ^ flip_masks[index];
             }
             delta_E = energy_lookup[proposal_state] - energy_lookup[current_state];
-
-            if(GSL_MIN(1.0, exp(-delta_E/T)) > gsl_rng_uniform(r)){
-                current_state = proposal_state;
+            
+            // Acceptance criteria
+            if(delta_E < 0){
+                current_state = proposal_state;        
+            } else if(exp(-delta_E/T) > gsl_rng_uniform(r)){
+                current_state = proposal_state;        
             }
 
             trajectory[j] = current_state;
@@ -65,20 +68,14 @@ void mcmc_get_averages(double *magnetisation_average, double *magnetisation_erro
     printf("Calculating running magnetisation...\n");
     int stride = simulations->stride;
     int n_blocks = simulations->n_blocks;
-    Data_lf *running_magnetisation = malloc(sizeof(Data_lf));
-    Data_lf *energies = malloc(sizeof(Data_lf));
     double *mag_old_mean = malloc(stride*sizeof(double));
     double *energy_old_mean = malloc(stride*sizeof(double));
-    //double *magnetisation_average = malloc(stride*sizeof(double));
-    //double *magnetisation_error = malloc(stride*sizeof(double));
-    energies->elements = malloc(n_blocks*simulations->stride*sizeof(double));
-    running_magnetisation->elements = malloc(simulations->n_blocks*simulations->stride*sizeof(double));
+    double *trajectory_magnetisation = malloc(stride*sizeof(double));
+    double *trajectory_energy = malloc(stride*sizeof(double));
 
     for(int i=0; i<n_blocks; i++){
         int block_index = i*stride;  // Index for the start of the block
         size_t *trajectory_simulation = simulations->elements + block_index;
-        double *trajectory_magnetisation = running_magnetisation->elements + block_index;
-        double *trajectory_energy = energies->elements + block_index;
         trajectory_magnetisation[0] = 0;
         trajectory_energy[0] = energy_lookup[simulations->elements[block_index]];
 
@@ -99,8 +96,8 @@ void mcmc_get_averages(double *magnetisation_average, double *magnetisation_erro
 
     free(mag_old_mean);
     free(energy_old_mean);
-    mcmc_free_data_lf(running_magnetisation);
-    mcmc_free_data_lf(energies);
+    free(trajectory_magnetisation);
+    free(trajectory_energy);
 }
 
 void mcmc_welford_step(double *average, double *error, double *trajectory, double *old_mean, int n_blocks, int i, int j){
@@ -119,11 +116,6 @@ void mcmc_welford_step(double *average, double *error, double *trajectory, doubl
     if(i == n_blocks - 1){
         error[j] = sqrt(error[j]/(n_blocks - 1));
     }
-}
-
-double mcmc_acceptance_MH(const double delta_E, const double T){
-
-    return GSL_MIN(1.0, exp(-delta_E/T));
 }
 
 double** mcmc_compute_lookups(Model *model, double T){
@@ -237,16 +229,7 @@ void mcmc_free_model(Model *model){
     free(model);
 }
 
-void mcmc_free_data_lf(Data_lf *data){
-    if(data != NULL){
-        free(data->elements);
-        free(data);
-    } else {
-        printf("No data to free!\n");
-    }
-}
-
-void mcmc_free_data_int(Data_int *data){
+void mcmc_free_data(Data_int *data){
     if(data != NULL){
         free(data->elements);
         free(data);
