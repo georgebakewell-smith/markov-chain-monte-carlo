@@ -1,0 +1,12 @@
+name: parallel_mcmc
+channels:
+  - defaults
+dependencies:
+  - python==3.11
+  - numpy
+  - matplotlib
+  - scipy
+  - ipykernel
+  - numba
+  - time
+  - json
