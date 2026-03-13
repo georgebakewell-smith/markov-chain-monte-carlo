@@ -42,15 +42,19 @@ def generate_plots(folder, filename, output_file):
 
     # plot average magnetisation
     transparency = 0.2
+    line1 = 'Uniform No Swap'
+    line2 = 'Uniform'
+    line3 = 'Local'
+    line4 = 'Alternate'
 
     plt.subplot(2, 2, 1)
-    plt.plot(x, mean_average_uniform, label='Uniform', color='blue')
+    plt.plot(x, mean_average_uniform, label=line1, color='blue')
     plt.fill_between(x, mean_average_uniform - uniform_error, mean_average_uniform + uniform_error, color='blue', alpha=transparency)
-    plt.plot(x, mean_average_local, label='Local', color='orange')
+    plt.plot(x, mean_average_local, label=line2, color='orange')
     plt.fill_between(x, mean_average_local - local_error, mean_average_local + local_error, color='orange', alpha=transparency)
-    plt.plot(x, mean_average_parallel, label='Dual', color='red')
+    plt.plot(x, mean_average_parallel, label=line3, color='red')
     plt.fill_between(x, mean_average_parallel - parallel_error, mean_average_parallel + parallel_error, color='red', alpha=transparency)
-    plt.plot(x, mean_average_coupling, label='Dual MH', color='purple')
+    plt.plot(x, mean_average_coupling, label=line4, color='purple')
     plt.fill_between(x, mean_average_coupling - parallel_coupling_error, mean_average_coupling + parallel_coupling_error, color='purple', alpha=transparency)
     if N <= N_exact_threshold:
         plt.plot([x[0], x[len(x) - 1]], [average_exact_magnetisation, average_exact_magnetisation], label='Exact', color = 'black', linestyle = 'dashed')
@@ -64,39 +68,40 @@ def generate_plots(folder, filename, output_file):
 
     # plot error
     plt.subplot(2, 2, 2)
-    plt.plot(x, uniform_error, label='Uniform', color='blue')
-    plt.plot(x, local_error, label='Local', color='orange')
-    plt.plot(x, parallel_error, label='Dual', color='red')
-    plt.plot(x, parallel_coupling_error, label='Dual MH', color='purple')
+    plt.plot(x, abs(mean_energy_uniform - average_exact_energy), label=line1, color='blue')
+    plt.plot(x, abs(mean_energy_local - average_exact_energy), label=line2, color='orange')
+    plt.plot(x, abs(mean_energy_parallel - average_exact_energy), label=line3, color='red')
+    plt.plot(x, abs(mean_energy_coupling - average_exact_energy), label=line4, color='purple')
     plt.xlabel('Step')
-    plt.ylabel('Standard deviation')
-    plt.title('Magnetisation Error')
+    plt.ylabel('|Average E(s) - <E>|')
+    plt.title('Energy Error')
     plt.legend(loc='upper right')
     plt.grid(True)
     plt.xlim(burn_in, M)
-    plt.ylim(0, 0.5)
+    plt.ylim(-0.1, 10)
 
     #plot energy
     plt.subplot(2, 2, 3)
-    plt.plot(x, mean_energy_uniform, label='Uniform', color='blue')
-    plt.plot(x, mean_energy_local, label='Local', color='orange')
-    plt.plot(x, mean_energy_parallel, label='Dual', color='red')
-    plt.plot(x, mean_energy_coupling, label='Dual MH', color='purple')
+    plt.plot(x, mean_energy_uniform, label=line1, color='blue')
+    plt.plot(x, mean_energy_local, label=line2, color='orange')
+    plt.plot(x, mean_energy_parallel, label=line3, color='red')
+    plt.plot(x, mean_energy_coupling, label=line4, color='purple')
     if N <= N_exact_threshold:
         plt.plot([x[0], x[len(x) - 1]], [average_exact_energy, average_exact_energy], label='Exact', color = 'black', linestyle = 'dashed')
     plt.xlabel('Step')
     plt.ylabel('Average E(s)')
-    plt.ylim(average_exact_energy*1.1, 0)
-    plt.title('Instantaneous average energy after step')
+    #plt.ylim(average_exact_energy*1.1, 0)
+    plt.ylim(-35, -20)
+    plt.title('Running average energy after step')
     plt.legend(loc='upper right')
     plt.grid(True)
 
     # plot magnetisation of individual trajectory
     plt.subplot(2, 2, 4)
-    plt.plot(x, magnetisation_uniform, label='Uniform', color='blue')
-    plt.plot(x, magnetisation_local, label='Local', color='orange')
-    plt.plot(x, magnetisation_parallel, label='Dual', color='red')
-    plt.plot(x, magnetisation_parallel_coupling, label='Dual MH', color='purple')
+    plt.plot(x, magnetisation_uniform, label=line1, color='blue')
+    plt.plot(x, magnetisation_local, label=line2, color='orange')
+    plt.plot(x, magnetisation_parallel, label=line3, color='red')
+    plt.plot(x, magnetisation_parallel_coupling, label=line4, color='purple')
     if N <= N_exact_threshold:
         plt.plot([x[0], x[len(x) - 1]], [average_exact_magnetisation, average_exact_magnetisation], label='Exact', color = 'black', linestyle = 'dashed')
     plt.xlabel('Step')
@@ -107,12 +112,12 @@ def generate_plots(folder, filename, output_file):
     plt.ylim(-1, 1)
 
     plt.savefig(output_file)
-    plt.suptitle(f"Replica Exchange Simulations: N = {N}, K = {K} (Constant), {number_trajectories} Trajectories Sampled")
+    plt.suptitle(f"Replica Exchange Simulations: N = {N}, K = {K} (Constant), T = {T}, {number_trajectories} Trajectories Sampled")
     plt.show()
 
 if __name__ == '__main__':
 
-    filename = "data_seed63N14a1_bad.json"
+    filename = "data.json"
     folder = "meeting_plots"
     output_file = "magnetisation_fig.pdf"
 

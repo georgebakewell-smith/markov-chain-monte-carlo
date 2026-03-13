@@ -25,13 +25,13 @@ def method_comparison(J, h, N, T, M, K, number_trajectories, folder="./", filena
     print("About to start simulations...")
 
     # Run simulations
-    average_magnetisation_uniform, energy_uniform, magnetisation_uniform = mcmc.parallel_simulations(N, T, burn_in, M, K, "parallel uniform", number_trajectories, energy_lookup, magnetisation_lookup, 2)
+    average_magnetisation_uniform, energy_uniform, magnetisation_uniform = mcmc.parallel_simulations(N, T, burn_in, M, K, "parallel uniform", number_trajectories, energy_lookup, magnetisation_lookup, -1)
     print("Uniform method complete.")
-    average_magnetisation_local, energy_local, magnetisation_local = mcmc.parallel_simulations(N, T, burn_in, M, K, "parallel uniform", number_trajectories, energy_lookup, magnetisation_lookup, 1)
+    average_magnetisation_local, energy_local, magnetisation_local = mcmc.parallel_simulations(N, T, burn_in, M, K, "parallel uniform", number_trajectories, energy_lookup, magnetisation_lookup, 6)
     print("Local method complete.")
-    average_parallel, energy_parallel, magnetisation_parallel = mcmc.parallel_simulations(N, T, burn_in, M, K, "parallel uniform", number_trajectories, energy_lookup, magnetisation_lookup, 2)
+    average_parallel, energy_parallel, magnetisation_parallel = mcmc.parallel_simulations(N, T, burn_in, M, K, "parallel local", number_trajectories, energy_lookup, magnetisation_lookup, 6)
     print("Dual method complete.")
-    average_parallel_coupling, energy_parallel_coupling, magnetisation_parallel_coupling = mcmc.parallel_simulations(N, T, burn_in, M, K, "parallel uniform", number_trajectories, energy_lookup, magnetisation_lookup, 3)
+    average_parallel_coupling, energy_parallel_coupling, magnetisation_parallel_coupling = mcmc.parallel_simulations(N, T, burn_in, M, K, "parallel alternate", number_trajectories, energy_lookup, magnetisation_lookup, 6)
     print("Dual MH method complete.")
         
     x = range(len(average_magnetisation_uniform[0]))
@@ -88,19 +88,19 @@ def method_comparison(J, h, N, T, M, K, number_trajectories, folder="./", filena
     end = time.time()
     print(f"Execution time : {end - start:.4f} seconds")
 
-    return mean_average_uniform, mean_average_local, mean_average_parallel, mean_average_coupling, average_exact_magnetisation
+    return mean_average_uniform, mean_average_local, mean_average_parallel, mean_average_coupling, average_exact_magnetisation, mean_energy_uniform, mean_energy_local, mean_energy_parallel, mean_energy_coupling, average_exact_energy
 
 if __name__ == '__main__':
     # Example usage
-    N = 12
+    N = 14
     [J, h] = mcmc.generate_model(N, "glass", random=True, seed=None)  # seed = 12 N=10, is good for spin glass, seed=12 N=14 good for nn
-    T = 0.1
-    M = 15000  # number of MCMC steps
-    K = 10   # number of steps before swapping states
+    T = 10
+    M = 100000  # number of MCMC steps
+    K = 1   # number of steps before swapping states
     number_trajectories = 1000  # number of trajectories to be sampled
-     
+    
     # Data files
-    folder = "./"
+    folder = "meeting_plots"
     filename = "data.json"
     output_file = "magnetisation_fig.pdf"
 

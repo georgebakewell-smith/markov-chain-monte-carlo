@@ -46,22 +46,24 @@ def trajectory_simulate(N, T, burn_in, M, K, method, energy_lookup, magnetisatio
     state_auxilliary = state
     counter = 0
     swap_counter = 0
-    energy_parallel_local = np.empty(M)
-    energy_parallel_local[0] = energy_lookup[state_auxilliary]
+    #energy_parallel_local = np.empty(M)
+    #energy_parallel_local[0] = energy_lookup[state_auxilliary]
 
     for i in range(1, M):
         
         # Obtain proposals
         state_proposal, state_proposal_auxilliary = get_proposals(method_primary, method_auxilliary, N, state, state_auxilliary)
-        state, energy[i] = MCMC_step(N, T, state, state_proposal, energy_lookup[state], energy_lookup[state_proposal])
-        state_auxilliary, energy_parallel_local[i] = MCMC_step(N, T, state_auxilliary, state_proposal_auxilliary, energy_lookup[state_auxilliary], energy_lookup[state_proposal_auxilliary])
+        state, eng = MCMC_step(N, T, state, state_proposal, energy_lookup[state], energy_lookup[state_proposal])
+        state_auxilliary, eng_parallel = MCMC_step(N, T, state_auxilliary, state_proposal_auxilliary, energy_lookup[state_auxilliary], energy_lookup[state_proposal_auxilliary])
         
         mag = magnetisation_lookup[state]
         # running average burn in
         if i > burn_in:
             running_average[i] = ((running_average[i-1]*(i - burn_in) + mag)/(i - burn_in + 1))
+            energy[i] = ((energy[i-1]*(i - burn_in) + eng)/(i - burn_in + 1))
         elif i == burn_in:
             running_average[i] = mag
+            energy[i] = eng
         counter +=1
 
         if counter == K:
@@ -79,32 +81,68 @@ def trajectory_simulate(N, T, burn_in, M, K, method, energy_lookup, magnetisatio
                     swap_counter += 1
             elif coupling == 2:
                 delta_E = energy_lookup[state_auxilliary] - energy_lookup[state]
-                Z = 1 + np.exp(-delta_E/T)
+                Z = 1 + np.exp(-abs(delta_E)/T)
                 if np.random.rand() < 1/Z:
-                    if delta_E < 0:
+                    if delta_E <= 0:
                         state = state_auxilliary
-                    elif delta_E > 0:
+                    elif delta_E >= 0:
                         state_auxilliary = state
 
-            else:
+            elif coupling == 3:
                 delta_E = energy_lookup[state_auxilliary] - energy_lookup[state]
-                accept_dual = max(acceptance_probability(delta_E, T), acceptance_probability(-delta_E, T))
-                if np.random.rand() < accept_dual:
+                Z = 1 + np.exp(-abs(delta_E)/T)
+                old_state = state
+                if np.random.rand() < 1 - 1/Z:
                     state = state_auxilliary
 
-                if np.random.rand() < accept_dual:
-                    state_auxilliary = state
-                        
-            counter = 0
+                if np.random.rand() < 1 - 1/Z:
+                    state_auxilliary = old_state
+            elif coupling == 4:
+                delta_E = energy_lookup[state_auxilliary] - energy_lookup[state]
+                if delta_E < 0:
+                    tmp = state
+                    state = state_auxilliary
+                    state_auxilliary = tmp
+                    swap_counter += 1
 
+            elif coupling == 5:
+                delta_E = energy_lookup[state_auxilliary] - energy_lookup[state]
+                if np.random.rand() < 1 - np.exp(-abs(delta_E/T)):
+                    tmp = state
+                    state = state_auxilliary
+                    state_auxilliary = tmp
+                    swap_counter +=1
+                
+
+            elif coupling == 6:
+                delta_E = energy_lookup[state_auxilliary] - energy_lookup[state] # Ey - Ex
+                a = np.exp(-abs(delta_E)/T)
+                rng = np.random.rand()
+                if rng < a:
+                    state_auxilliary = state
+                else:
+                    state = state_auxilliary
+                
+
+            counter = 0
         magnetisation[i] = mag
 
     return running_average, energy, magnetisation
-    
+@njit(inline = "always")
+def indicator(x):
+    if x==0:
+        return 0
+    elif x>0:
+        return 1
+    else:
+        return 0
+
+
 def statistics(array_2D):
     """
         Returns the mean and standard deviation of a 2D array along axis=0
     """
+    
     return np.mean(array_2D, axis=0), np.std(array_2D, axis=0)
 
 def generate_model(N, model, random=True, seed = None):
@@ -153,6 +191,7 @@ def get_proposals(method_primary, method_auxilliary, N, state, state_parallel):
     """
         Returns the proposal states for primary and auxilliary methods
     """
+
     if method_primary == "uniform":
         state_proposal = uniform_proposal(N)
     elif method_primary == "local":
@@ -178,6 +217,7 @@ def local_proposal(N, state):
     """
     Randomly flips one spin and returns decimal representation of new state
     """
+
     index = np.random.randint(0, N)
 
     return state ^ (1 << index)
@@ -275,4 +315,3 @@ def thermodynamic_averages(J, h, N, T, n):
     print("with degeneracies : ", counts[:n])
 
     return average_exact_magnetisation, average_exact_energy , energies[:n], counts[:n], unsorted_energies, magnetisations
-
